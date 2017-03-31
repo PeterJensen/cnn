@@ -1537,7 +1537,7 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
   // For now constraints: Simple linear order of layers, first layer input last layer a cost layer
   var Net = function(options) {
     this.layers  = [];
-    this.options = options;
+    this.options = options || {};
   }
 
   Net.prototype = {
@@ -1639,6 +1639,16 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
         act = this.layers[i].forward(act, is_training);
       }
       return act;
+    },
+
+    forwardWorker: function(V, callback) {
+      if (typeof this.options.useWorkers === "undefined" || !this.options.useWorkers) {
+        callback(this.forward(V));
+      }
+      else {
+        // use workers here
+        callback(this.forward(V));
+      }
     },
 
     getCostLoss: function(V, y) {

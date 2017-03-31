@@ -1,13 +1,12 @@
 // Author: Peter Jensen
 (function () {
 
-  const preTrainedNetFile  = "cifar10_snapshot.json";
-  const testBatchImageFile = "cifar10/cifar10_batch_50.png";
-  const samplesCount       = 16;
+  const wwQueueCountMax = 4;
 
   const domIds = {
     startStop:        "#startStop",
     reset:            "#reset",
+    useWorkers:       "#useWorkers",
     samples:          "#samples",
     testImageCount:   "#testImageCount",
     testTotalTime:    "#testTotalTime",
@@ -19,12 +18,16 @@
   // ------------------------
   // BEGIN CIFAR-10 SPECIFIC STUFF
   // ------------------------
-  var classes = ['airplane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'];
-  
-  var testBatch          = 50;
-  var numSamplesPerBatch = 1000;
-  var imageDimension     = 32;
-  var imageChannels      = 3;
+
+  const preTrainedNetFile  = "cifar10_snapshot.json";
+  const testBatchImageFile = "cifar10/cifar10_batch_50.png";
+  const samplesCount       = 16;
+  const testBatch          = 50;
+  const numSamplesPerBatch = 1000;
+  const imageDimension     = 32;
+  const imageChannels      = 3;
+
+  const classes = ['airplane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck'];
   
   // ------------------------
   // END CIFAR-10 SPECIFIC STUFF
@@ -32,8 +35,7 @@
 
   // module globals
   var net;
-  var running   = false;
-  var stepTimer = null;
+  var wwNet;
   var timing;
   var stats;
 
@@ -235,38 +237,133 @@
     }
   }
 
-  function processNext() {
-    var sample = Samples.next();
-    var result;
-    timing.record(function () {
-      result = net.forward(sample.vol);
-    });
-    addSample(sample, result);
-    updateStats();
-  }
+  var Processing = (function () {
 
-  function start() {
-    stepTimer = setInterval(processNext, 0);
-  }
+    function Processing() {}
 
-  function pause() {
-    clearInterval(stepTimer);
-  }
+    // exported static methods
+
+    Processing.start          = start;
+    Processing.pause          = pause;
+    Processing.useWorkers     = useWorkers;
+    Processing.isRunning      = isRunning;
+    Processing.isUsingWorkers = isUsingWorkers;
+
+    var stepTimer    = null;
+    var usingWorkers = false;
+    var wwQueueCount = 0;
+    var running      = false;  // indicate whether the processing should be running
+    var samples      = [];
+
+    // local helper functions
+
+    function resume() {
+      if (stepTimer !== null) {
+        return;
+      }
+      if (usingWorkers) {
+        stepTimer = setInterval(wwProcessNext, 0);
+      }
+      else {
+        stepTimer = setInterval(processNext, 0);
+      }
+    }
+
+    function suspend() {
+      if (stepTimer !== null) {
+        clearInterval(stepTimer);
+        stepTimer = null;
+      }
+    }
+
+    function isSuspended() {
+      return stepTimer === null;
+    }
+
+    function processNext() {
+      var sample = Samples.next();
+      var result;
+      timing.record(function () {
+        result = net.forward(sample.vol);
+      });
+      addSample(sample, result);
+      updateStats();
+    }
+
+    function wwProcessNext() {
+      var sample = Samples.next();
+      samples.push(sample);
+      net.forwardWorker(sample.vol, function (result) {
+        var sample = samples.shift();
+        addSample(sample, result);
+        if (running && isSuspended()) {
+          resume();
+        }
+      });
+      if (samples.length >= wwQueueCountMax) {
+        suspend();
+      }
+    }
+
+    // exported functions
+
+    function start() {
+      running = true;
+      resume();
+    }
+
+    function pause() {
+      running = false;
+      suspend();
+    }
+
+    function useWorkers(useThem) {
+      if (usingWorkers === useThem) {
+        return; // do nothing if no change
+      }
+      usingWorkers = useThem;
+      if (running) {
+        if (useThem) {
+          // Workers weren't used, so start using them
+          suspend();
+          resume();
+        }
+        else {
+          // Workers were used.  If there's still samples queued up
+          // the processing will be resumed when the last one is processed
+          suspend();
+          if (samples.length === 0) {
+            resume();
+          }
+        }
+      }
+    }
+
+    function isRunning() {
+      return running;
+    }
+
+    function isUsingWorkers() {
+      return usingWorkers;
+    }
+
+    return Processing;
+
+  })();
 
   // click handlers
   function clickStartStop() {
     var $button = $domIds.startStop;
-    if (running) {
+    if (Processing.isRunning()) {
       log("Pausing");
       $button.text("Start");
-      pause();
+      Processing.pause();
     }
     else {
       log("Starting");
       $button.text("Pause");
-      start();
+      Processing.start();
     }
-    running = !running;
   }
 
   function clickReset() {
@@ -278,9 +375,22 @@
     $domIds.samples.empty();
   }
 
+  function clickUseWorkers() {
+    var $button = $domIds.useWorkers;
+    if (Processing.isUsingWorkers()) {
+      $button.text("Start Workers");
+      Processing.useWorkers(false);
+    }
+    else {
+      $button.text("Stop Workers");
+      Processing.useWorkers(true);
+    }
+  }
+
   function setupClickHandlers() {
     $domIds.startStop.click(clickStartStop);
     $domIds.reset.click(clickReset);
+    $domIds.useWorkers.click(clickUseWorkers);
   }
 
   function setJqueryIds() {
@@ -300,6 +410,7 @@
     $.getJSON(preTrainedNetFile, function(json) {
       log(preTrainedNetFile + " loaded");
       net.fromJSON(json);
+      wwNet.fromJSON(json);
       Samples.loadBatch(testBatchImageFile, function () {
         log(testBatchImageFile + " loaded");
         setupClickHandlers();
