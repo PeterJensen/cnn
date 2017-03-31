@@ -32,8 +32,8 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       for(var i=0;i<n;i++) { arr[i]= 0; }
       return arr;
     } else {
-      return new Float64Array(n);
-//      return new Float32Array(n);
+//      return new Float64Array(n);
+      return new Float32Array(n);
     }
   }
 
@@ -405,27 +405,31 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       
       var V_sx = V.sx |0;
       var V_sy = V.sy |0;
+      var V_depth = V.depth;
       var xy_stride = this.stride |0;
 
       for(var d=0;d<this.out_depth;d++) {
-        var f = this.filters[d];
-        var x = -this.pad |0;
-        var y = -this.pad |0;
+        var f       = this.filters[d];
+        var f_depth = f.depth;
+        var f_sx    = f.sx;
+        var f_sy    = f.sy;
+        var x       = -this.pad |0;
+        var y       = -this.pad |0;
         for(var ay=0; ay<this.out_sy; y+=xy_stride,ay++) {  // xy_stride
           x = -this.pad |0;
           for(var ax=0; ax<this.out_sx; x+=xy_stride,ax++) {  // xy_stride
 
             // convolve centered at this particular location
             var a = 0.0;
-            for(var fy=0, fyl = f.sy; fy < fyl; fy++) {
+            for(var fy=0; fy < f_sy; fy++) {
               var oy = y+fy; // coordinates in the original input array coordinates
-              for(var fx=0, fxl = f.sx; fx < fxl; fx++) {
+              var f_sx_X_fy = f_sx*fy;
+              for(var fx=0; fx < f_sx; fx++) {
                 var ox = x+fx;
                 if(oy>=0 && oy<V_sy && ox>=0 && ox<V_sx) {
-                  var depth = f.depth;
-                  var fwi   = ((f.sx * fy)+fx)*depth;
-                  var Vwi   = ((V_sx * oy)+ox)*V.depth;
-                  for(var fd=0;fd<depth;fd++) {
+                  var fwi   = (f_sx_X_fy+fx)*f_depth;
+                  var Vwi   = ((V_sx * oy)+ox)*V_depth;
+                  for(var fd=0;fd<f_depth;fd++) {
                     // avoid function call overhead (x2) for efficiency, compromise modularity :(
                     a += f.w[fwi+fd] * V.w[Vwi+fd];
                   }
@@ -459,7 +463,7 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
 
             // convolve centered at this particular location
             var chain_grad = this.out_act.get_grad(ax,ay,d); // gradient from above, from chain rule
-            for(var fy=0;fy<f.sy;fy++) {
+            for(var fy=0;fy<f_sy;fy++) {
               var oy = y+fy; // coordinates in the original input array coordinates
               for(var fx=0;fx<f.sx;fx++) {
                 var ox = x+fx;
@@ -931,8 +935,8 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       var x = this.in_act;
       x.dw = global.zeros(x.w.length); // zero out the gradient of input Vol
       var loss = 0.0;
-      if(y instanceof Array || y instanceof Float64Array) {
-//      if(y instanceof Float32Array || y instanceof Array || y instanceof Float64Array) {
+//      if(y instanceof Array || y instanceof Float64Array) {
+      if(y instanceof Float32Array || y instanceof Array || y instanceof Float64Array) {
         for(var i=0;i<this.out_depth;i++) {
           var dy = x.w[i] - y[i];
           x.dw[i] = dy;
@@ -1532,7 +1536,8 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
   // Net manages a set of layers
   // For now constraints: Simple linear order of layers, first layer input last layer a cost layer
   var Net = function(options) {
-    this.layers = [];
+    this.layers  = [];
+    this.options = options;
   }
 
   Net.prototype = {

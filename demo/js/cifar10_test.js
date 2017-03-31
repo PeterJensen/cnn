@@ -3,13 +3,18 @@
 
   const preTrainedNetFile  = "cifar10_snapshot.json";
   const testBatchImageFile = "cifar10/cifar10_batch_50.png";
+  const samplesCount       = 16;
 
-  var domIds = {
-    startStop:  "#startStop",
-    reset:      "#reset",
-    samples:    "#samples",
+  const domIds = {
+    startStop:        "#startStop",
+    reset:            "#reset",
+    samples:          "#samples",
+    testImageCount:   "#testImageCount",
+    testTotalTime:    "#testTotalTime",
+    testTimePerImage: "#testTimePerImage",
+    accuracy:         "#accuracy"
   };
-  var $Ids = {};
+  var $domIds = {}; // jQuery Ids of referenced DOM elements.  Initialized after page load
   
   // ------------------------
   // BEGIN CIFAR-10 SPECIFIC STUFF
@@ -27,8 +32,10 @@
 
   // module globals
   var net;
-  var running = false;
+  var running   = false;
   var stepTimer = null;
+  var timing;
+  var stats;
 
   // misc utitilities
   function log(msg) {
@@ -42,6 +49,7 @@
     function Samples() {};
     Samples.loadBatch = loadBatch;
     Samples.next      = next;
+    Samples.reset     = reset;
 
     function loadBatch(file, done) {
       var testBatchImage = new Image();
@@ -78,7 +86,55 @@
       return {vol: vol, label: labels[n]};
     }
 
+    function reset() {
+      nextIndex = 0;
+    }
+
     return Samples;
+  })();
+
+  var Timing = (function () {
+
+    function Timing() {
+      this.count = 0;
+      this.total = 0;
+    }
+
+    Timing.prototype.record = function(fct) {
+      var startTime = Date.now();
+      fct();
+      var stopTime = Date.now();
+      this.count++;
+      this.total += (stopTime - startTime);
+    }
+    Timing.prototype.reset = function() {
+      this.count = 0;
+      this.total = 0;
+    }
+
+    return Timing;
+
+  })();
+
+  var Stats = (function () {
+
+    function Stats() {
+      this.count = 0;
+      this.successCount = 0;
+    }
+    Stats.prototype.record = function (success) {
+      this.count++;
+      if (success) {
+        this.successCount++;
+      }
+    }
+    Stats.prototype.reset = function () {
+      this.count = 0;
+      this.successCount = 0;
+    }
+
+    return Stats;
+
   })();
 
   function makeImage(vol, scale, grads) {
@@ -154,18 +210,39 @@
     var $probs      = makeProbs(predictions, sample.label);
     var $div        = $("<div class='testdiv'>");
     $div.append($canv, $probs);
-    var $testDivs = $Ids.samples.find(">div");
-    if ($testDivs.size() > 7) {
-      $Ids.samples.find(">div:last").remove();
+    var $testDivs = $domIds.samples.find(">div");
+    if ($testDivs.size() > samplesCount - 1) {
+      $domIds.samples.find(">div:last").remove();
     }
-    $Ids.samples.prepend($div);
+    $domIds.samples.prepend($div);
+    stats.record(predictions[0].key === sample.label);
+  }
+
+  function updateStats() {
+    $domIds.testImageCount.text(timing.count);
+    $domIds.testTotalTime.text(timing.total + "ms");
+    if (timing.count > 0) {
+      $domIds.testTimePerImage.text(Math.round(timing.total/timing.count) + "ms");
+    }
+    else {
+      $domIds.testTimePerImage.text("N/A");
+    }
+    if (stats.count > 0) {
+      $domIds.accuracy.text((100*stats.successCount/stats.count).toFixed(1) + "%");
+    }
+    else {
+      $domIds.accuracy.text("N/A");
+    }
   }
 
   function processNext() {
-    log("processNext");
-    var sample      = Samples.next();
-    var result      = net.forward(sample.vol);
+    var sample = Samples.next();
+    var result;
+    timing.record(function () {
+      result = net.forward(sample.vol);
+    });
     addSample(sample, result);
+    updateStats();
   }
 
   function start() {
@@ -178,7 +255,7 @@
 
   // click handlers
   function clickStartStop() {
-    var $button = $Ids.startStop;
+    var $button = $domIds.startStop;
     if (running) {
       log("Pausing");
       $button.text("Start");
@@ -194,24 +271,32 @@
 
   function clickReset() {
     log("Resetting");
+    timing.reset();
+    stats.reset();
+    Samples.reset();
+    updateStats();
+    $domIds.samples.empty();
   }
 
   function setupClickHandlers() {
-    $Ids.startStop.click(clickStartStop);
-    $Ids.reset.click(clickReset);
+    $domIds.startStop.click(clickStartStop);
+    $domIds.reset.click(clickReset);
   }
 
   function setJqueryIds() {
     var keys = Object.keys(domIds);
     for (var ki = 0; ki < keys.length; ++ki) {
       var key = keys[ki];
-      $Ids[key] = $(domIds[key]);
+      $domIds[key] = $(domIds[key]);
     }
   }
 
   function main() {
-    net = new convnetjs.Net();
     setJqueryIds();
+    net    = new convnetjs.Net();
+    wwNet  = new convnetjs.Net({useWorkers: true});
+    timing = new Timing();
+    stats  = new Stats();
     $.getJSON(preTrainedNetFile, function(json) {
       log(preTrainedNetFile + " loaded");
       net.fromJSON(json);
