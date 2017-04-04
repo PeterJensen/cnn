@@ -4,14 +4,17 @@
   const wwQueueCountMax = 4;
 
   const domIds = {
-    startStop:        "#startStop",
-    reset:            "#reset",
-    useWorkers:       "#useWorkers",
-    samples:          "#samples",
-    testImageCount:   "#testImageCount",
-    testTotalTime:    "#testTotalTime",
-    testTimePerImage: "#testTimePerImage",
-    accuracy:         "#accuracy"
+    startStop:          "#startStop",
+    reset:              "#reset",
+    useWorkers:         "#useWorkers",
+    samples:            "#samples",
+    testImageCount:     "#testImageCount",
+    testTotalTime:      "#testTotalTime",
+    testTimePerImage:   "#testTimePerImage",
+    accuracy:           "#accuracy",
+    wwTestImageCount:   "#wwTestImageCount",
+    wwTestTotalTime:    "#wwTestTotalTime",
+    wwTestTimePerImage: "#wwTestTimePerImage",
   };
   var $domIds = {}; // jQuery Ids of referenced DOM elements.  Initialized after page load
   
@@ -36,7 +39,8 @@
   // module globals
   var net;
   var wwNet;
-  var timing;
+  var timer;
+  var wwTimers = [];
   var stats;
 
   // misc utitilities
@@ -98,8 +102,9 @@
   var Timing = (function () {
 
     function Timing() {
-      this.count = 0;
-      this.total = 0;
+      this.count     = 0;
+      this.total     = 0;
+      this.startTime = 0;
     }
 
     Timing.prototype.record = function(fct) {
@@ -110,8 +115,16 @@
       this.total += (stopTime - startTime);
     }
     Timing.prototype.reset = function() {
-      this.count = 0;
-      this.total = 0;
+      this.count     = 0;
+      this.total     = 0;
+      this.startTime = 0;
+    }
+    Timing.prototype.start = function() {
+      this.startTime = Date.now();
+    }
+    Timing.prototype.stop = function() {
+      this.count++;
+      this.total += Date.now() - this.startTime;
     }
 
     return Timing;
@@ -221,10 +234,10 @@
   }
 
   function updateStats() {
-    $domIds.testImageCount.text(timing.count);
-    $domIds.testTotalTime.text(timing.total + "ms");
-    if (timing.count > 0) {
-      $domIds.testTimePerImage.text(Math.round(timing.total/timing.count) + "ms");
+    $domIds.testImageCount.text(timer.count);
+    $domIds.testTotalTime.text(timer.total + "ms");
+    if (timer.count > 0) {
+      $domIds.testTimePerImage.text(Math.round(timer.total/timer.count) + "ms");
     }
     else {
       $domIds.testTimePerImage.text("N/A");
@@ -234,6 +247,21 @@
     }
     else {
       $domIds.accuracy.text("N/A");
+    }
+
+    var wwCount = 0;
+    var wwTotal = 0;
+    for (var i = 0; i < wwQueueCountMax; ++i) {
+      wwCount += wwTimers[i].count;
+      wwTotal += wwTimers[i].total;
+    }
+    $domIds.wwTestImageCount.text(wwCount);
+    $domIds.wwTestTotalTime.text(wwTotal + "ms");
+    if (wwCount > 0) {
+      $domIds.wwTestTimePerImage.text(Math.round(wwTotal/wwCount) + "ms");
+    }
+    else {
+      $domIds.wwTestTimePerImage.text("N/A");
     }
   }
 
@@ -251,9 +279,8 @@
 
     var stepTimer    = null;
     var usingWorkers = false;
-    var wwQueueCount = 0;
     var running      = false;  // indicate whether the processing should be running
-    var samples      = [];
+    var queue        = [];
 
     // local helper functions
 
@@ -283,7 +310,7 @@
     function processNext() {
       var sample = Samples.next();
       var result;
-      timing.record(function () {
+      timer.record(function () {
         result = net.forward(sample.vol);
       });
       addSample(sample, result);
@@ -292,15 +319,19 @@
 
     function wwProcessNext() {
       var sample = Samples.next();
-      samples.push(sample);
-      net.forwardWorker(sample.vol, function (result) {
-        var sample = samples.shift();
-        addSample(sample, result);
+      var wwTimer = wwTimers[queue.length];
+      queue.push({sample: sample, timer: wwTimer});
+      wwTimer.start();
+      wwNet.wwForward(sample.vol, function (result) {
+        var entry = queue.shift();
+        entry.timer.stop();
+        addSample(entry.sample, result);
+        updateStats();
         if (running && isSuspended()) {
           resume();
         }
       });
-      if (samples.length >= wwQueueCountMax) {
+      if (queue.length >= wwQueueCountMax) {
         suspend();
       }
     }
@@ -332,7 +363,7 @@
           // Workers were used.  If there's still samples queued up
           // the processing will be resumed when the last one is processed
           suspend();
-          if (samples.length === 0) {
+          if (queue.length === 0) {
             resume();
           }
         }
@@ -368,7 +399,10 @@
 
   function clickReset() {
     log("Resetting");
-    timing.reset();
+    timer.reset();
+    for (var i = 0; i < wwQueueCountMax; ++i) {
+      wwTimers[i].reset();
+    }
     stats.reset();
     Samples.reset();
     updateStats();
@@ -405,7 +439,10 @@
     setJqueryIds();
     net    = new convnetjs.Net();
     wwNet  = new convnetjs.Net({useWorkers: true});
-    timing = new Timing();
+    timer  = new Timing();
+    for (var i = 0; i < wwQueueCountMax; ++i) {
+      wwTimers.push(new Timing());
+    }
     stats  = new Stats();
     $.getJSON(preTrainedNetFile, function(json) {
       log(preTrainedNetFile + " loaded");

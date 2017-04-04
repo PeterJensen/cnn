@@ -13,18 +13,23 @@
     <h2>CIFAR-10 Test Harness</h2>
 
     <h1>Description</h1>
-    <p>Runs the test set of images, on the pre-trained network: cifar10_snapshot.js</p>
-    <p>The expected accuracy is around 75%</p>
+    <p>Runs the test set of images, on the pre-trained network: cifar10_snapshot.js.
+       The expected accuracy is around 75%</p>
 
     <h1>Control and Statistics</h1>
     <button id="startStop">Start</button>
     <button id="reset">Reset</button>
     <button id="useWorkers">Start Workers</button>
     <div>
+      Accuracy: <span id="accuracy"></span><br />
+      <h3>Timing when NOT using Workers</h3>
       Number of test images: <span id="testImageCount"></span><br />
       Total time: <span id="testTotalTime"></span><br />
       Time per image: <span id="testTimePerImage"></span><br />
-      Accuracy: <span id="accuracy"></span><br />
+      <h3>Timing when using Workers</h3>
+      Number of test images: <span id="wwTestImageCount"></span><br />
+      Total time: <span id="wwTestTotalTime"></span><br />
+      Time per image: <span id="wwTestTimePerImage"></span><br />
     </div>
     
     <h1>Sample Classifications</h1>

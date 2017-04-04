@@ -444,6 +444,9 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       this.out_act = A;
       return this.out_act;
     },
+    wwForward: function(V, callback) {
+      callback(this.forward(V));
+    },
     backward: function() {
 
       var V = this.in_act;
@@ -578,6 +581,9 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       this.out_act = A;
       return this.out_act;
     },
+    wwForward: function(V, callback) {
+      callback(this.forward(V));
+    },
     backward: function() {
       var V = this.in_act;
       V.dw = global.zeros(V.w.length); // zero out the gradient in input Vol
@@ -708,6 +714,9 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       }
       this.out_act = A;
       return this.out_act;
+    },
+    wwForward: function(V, callback) {
+      callback(this.forward(V));
     },
     backward: function() { 
       // pooling layers have no parameters, so simply compute 
@@ -868,6 +877,9 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       this.es = es; // save these for backprop
       this.out_act = A;
       return this.out_act;
+    },
+    wwForward: function(V, callback) {
+      callback(this.forward(V));
     },
     backward: function(y) {
 
@@ -1075,6 +1087,9 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       }
       this.out_act = V2;
       return this.out_act;
+    },
+    wwForward: function(V, callback) {
+      callback(this.forward(V));
     },
     backward: function() {
       var V = this.in_act; // we need to set dw of this
@@ -1641,13 +1656,27 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       return act;
     },
 
-    forwardWorker: function(V, callback) {
+    wwForward: function(V, callback) {
       if (typeof this.options.useWorkers === "undefined" || !this.options.useWorkers) {
         callback(this.forward(V));
       }
       else {
         // use workers here
-        callback(this.forward(V));
+        var act = this.layers[0].forward(V);
+        var layerIndex = 1;
+        var that       = this;
+        function forwardLayer(act, done) {
+          that.layers[layerIndex].wwForward(act, function (result) {
+            layerIndex++;
+            if (layerIndex === that.layers.length) {
+              done(result);
+            }
+            else {
+              forwardLayer(result, done);
+            }
+          });
+        }
+        forwardLayer(act, callback);
       }
     },
 
