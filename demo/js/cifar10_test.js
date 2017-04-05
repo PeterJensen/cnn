@@ -8,10 +8,10 @@
     reset:              "#reset",
     useWorkers:         "#useWorkers",
     samples:            "#samples",
+    accuracy:           "#accuracy",
     testImageCount:     "#testImageCount",
     testTotalTime:      "#testTotalTime",
     testTimePerImage:   "#testTimePerImage",
-    accuracy:           "#accuracy",
     wwTestImageCount:   "#wwTestImageCount",
     wwTestTotalTime:    "#wwTestTotalTime",
     wwTestTimePerImage: "#wwTestTimePerImage",
@@ -38,10 +38,10 @@
 
   // module globals
   var net;
-  var wwNet;
   var timer;
-  var wwTimers = [];
   var stats;
+  var wwNet;
+  var wwTimers;
 
   // misc utitilities
   function log(msg) {
@@ -439,11 +439,12 @@
     setJqueryIds();
     net    = new convnetjs.Net();
     wwNet  = new convnetjs.Net({useWorkers: true});
+    stats  = new Stats();
     timer  = new Timing();
+    wwTimers = [];
     for (var i = 0; i < wwQueueCountMax; ++i) {
       wwTimers.push(new Timing());
     }
-    stats  = new Stats();
     $.getJSON(preTrainedNetFile, function(json) {
       log(preTrainedNetFile + " loaded");
       net.fromJSON(json);

@@ -365,6 +365,7 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
   // - FullyConn is fully connected dot products 
   // - ConvLayer does convolutions (so weight sharing spatially)
   // putting them together in one file because they are very similar
+
   var ConvLayer = function(opt) {
     var opt = opt || {};
 
@@ -396,6 +397,7 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
     for(var i=0;i<this.out_depth;i++) { this.filters.push(new Vol(this.sx, this.sy, this.in_depth)); }
     this.biases = new Vol(1, 1, this.out_depth, bias);
   }
+
   ConvLayer.prototype = {
     forward: function(V, is_training) {
       // optimized code by @mdda that achieves 2x speedup over previous version
@@ -445,7 +447,12 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       return this.out_act;
     },
     wwForward: function(V, callback) {
-      callback(this.forward(V));
+      if (this.layerWorker === null) {
+        callback(this.forward(V));
+      }
+      else {
+        this.layerWorker.forward(V, callback);
+      }
     },
     backward: function() {
 
@@ -1547,12 +1554,80 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
   "use strict";
   var Vol = global.Vol; // convenience
   var assert = global.assert;
+  const defaultOptions = {
+    useWorkers: false
+  };
 
   // Net manages a set of layers
   // For now constraints: Simple linear order of layers, first layer input last layer a cost layer
+
+  // the layers that will use workers if Net({useWorkers: true}) is specified
+  const wwScripts = {
+    conv: "../build/ww-conv.js"
+  }
+
+  var LayerWorker = (function () {
+
+    var workerId = 0;
+
+    const sendMessageKinds = {
+      start:   "start",
+      forward: "forward"
+    }
+    const receiveMessageKinds = {
+      log:    "log",
+      result: "result",
+    }
+
+    function makeMessage(kind, payload) {
+      return {kind: kind, payload: payload};
+    }
+
+    function handleMessage(layerWorker, message) {
+      switch (message.kind) {
+        case receiveMessageKinds.log:
+          console.log("log(" + layerWorker.workerId + "): " + message.payload);
+          break;
+        case receiveMessageKinds.result:
+          console.log("result(" + layerWorker.workerId + "): ");
+          var vol = new Vol();
+          vol.fromJSON(message.payload);
+          layerWorker.callback(vol);
+          break;
+      }
+    }
+
+    function LayerWorker(wwScript, layer) {
+      var that      = this;
+      this.layer    = layer;
+      this.workerId = workerId++;
+      this.worker   = new Worker(wwScript);
+      this.worker.onmessage = function (e) {
+        handleMessage(that, e.data);
+      }
+      this.worker.postMessage(makeMessage(sendMessageKinds.start, layer));
+    }
+
+    LayerWorker.prototype.forward = function (vol, callback) {
+      this.callback = callback;
+//      callback(this.layer.forward(vol));
+      this.worker.postMessage(makeMessage(sendMessageKinds.forward, vol));
+    }
+
+    return LayerWorker;
+  })();
+
+
   var Net = function(options) {
     this.layers  = [];
     this.options = options || {};
+    var keys = Object.keys(defaultOptions);
+    for (var ki in keys) {
+      var key = keys[ki];
+      if (typeof this.options[key] === "undefined") {
+        this.options[key] = defaultOptions[key];
+      }
+    }
   }
 
   Net.prototype = {
@@ -1625,21 +1700,31 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
           def.in_depth = prev.out_depth;
         }
 
+        var layer = null;
         switch(def.type) {
-          case 'fc': this.layers.push(new global.FullyConnLayer(def)); break;
-          case 'lrn': this.layers.push(new global.LocalResponseNormalizationLayer(def)); break;
-          case 'dropout': this.layers.push(new global.DropoutLayer(def)); break;
-          case 'input': this.layers.push(new global.InputLayer(def)); break;
-          case 'softmax': this.layers.push(new global.SoftmaxLayer(def)); break;
-          case 'regression': this.layers.push(new global.RegressionLayer(def)); break;
-          case 'conv': this.layers.push(new global.ConvLayer(def)); break;
-          case 'pool': this.layers.push(new global.PoolLayer(def)); break;
-          case 'relu': this.layers.push(new global.ReluLayer(def)); break;
-          case 'sigmoid': this.layers.push(new global.SigmoidLayer(def)); break;
-          case 'tanh': this.layers.push(new global.TanhLayer(def)); break;
-          case 'maxout': this.layers.push(new global.MaxoutLayer(def)); break;
-          case 'svm': this.layers.push(new global.SVMLayer(def)); break;
+          case 'fc':         layer = new global.FullyConnLayer(def); break;
+          case 'lrn':        layer = new global.LocalResponseNormalizationLayer(def); break;
+          case 'dropout':    layer = new global.DropoutLayer(def); break;
+          case 'input':      layer = new global.InputLayer(def); break;
+          case 'softmax':    layer = new global.SoftmaxLayer(def); break;
+          case 'regression': layer = new global.RegressionLayer(def); break;
+          case 'conv':       layer = new global.ConvLayer(def); break;
+          case 'pool':       layer = new global.PoolLayer(def); break;
+          case 'relu':       layer = new global.ReluLayer(def); break;
+          case 'sigmoid':    layer = new global.SigmoidLayer(def); break;
+          case 'tanh':       layer = new global.TanhLayer(def); break;
+          case 'maxout':     layer = new global.MaxoutLayer(def); break;
+          case 'svm':        layer = new global.SVMLayer(def); break;
           default: console.log('ERROR: UNRECOGNIZED LAYER TYPE: ' + def.type);
+        }
+        if (layer !== null) {
+          if (this.options.useWorkers && typeof wwScripts[def.type] !== "undefined") {
+            layer.layerWorker = new LayerWorker(wwScripts[def.type], layer);
+          }
+          else {
+            layer.layerWorker = null;
+          }
+          this.layers.push(layer);
         }
       }
     },
@@ -1657,7 +1742,7 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
     },
 
     wwForward: function(V, callback) {
-      if (typeof this.options.useWorkers === "undefined" || !this.options.useWorkers) {
+      if (!this.options.useWorkers) {
         callback(this.forward(V));
       }
       else {
@@ -1749,6 +1834,12 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
         if(t==='maxout') { L = new global.MaxoutLayer(); }
         if(t==='svm') { L = new global.SVMLayer(); }
         L.fromJSON(Lj);
+        if (this.options.useWorkers && typeof wwScripts[t] !== "undefined") {
+          L.layerWorker = new LayerWorker(wwScripts[t], L);
+        }
+        else {
+          L.layerWorker = null;
+        }
         this.layers.push(L);
       }
     }
