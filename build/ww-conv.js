@@ -29,20 +29,20 @@ var Vol = (function() {
   return Vol;
 })();
 
-var layer;
+var layer; // initialized by "start" message
 
 function forward(V) {
   var A = new Vol(layer.out_sx |0, layer.out_sy |0, layer.out_depth |0, 0.0);
   var V_sx = V.sx |0;
   var V_sy = V.sy |0;
-  var V_depth = V.depth;
+  var V_depth = V.depth |0;
   var xy_stride = layer.stride |0;
 
   for(var d=0;d<layer.out_depth;d++) {
     var f       = layer.filters[d];
-    var f_depth = f.depth;
-    var f_sx    = f.sx;
-    var f_sy    = f.sy;
+    var f_depth = f.depth |0;
+    var f_sx    = f.sx |0;
+    var f_sy    = f.sy |0;
     var x       = -layer.pad |0;
     var y       = -layer.pad |0;
     for(var ay=0; ay<layer.out_sy; y+=xy_stride,ay++) {  // xy_stride
@@ -52,14 +52,14 @@ function forward(V) {
         // convolve centered at this particular location
         var a = 0.0;
         for(var fy=0; fy < f_sy; fy++) {
-          var oy = y+fy; // coordinates in the original input array coordinates
-          var f_sx_X_fy = f_sx*fy;
+          var oy = (y+fy) |0; // coordinates in the original input array coordinates
+          var f_sx_X_fy = (f_sx*fy) |0;
           for(var fx=0; fx < f_sx; fx++) {
-            var ox = x+fx;
+            var ox = (x+fx) |0;
             if(oy>=0 && oy<V_sy && ox>=0 && ox<V_sx) {
-              var fwi   = (f_sx_X_fy+fx)*f_depth;
-              var Vwi   = ((V_sx * oy)+ox)*V_depth;
-              for(var fd=0;fd<f_depth;fd++) {
+              var fwi   = ((f_sx_X_fy+fx)*f_depth) |0;
+              var Vwi   = (((V_sx * oy)+ox)*V_depth) |0;
+              for(var fd = 0; fd < f_depth; fd++) {
                 // avoid function call overhead (x2) for efficiency, compromise modularity :(
                 a += f.w[fwi+fd] * V.w[Vwi+fd];
               }
@@ -84,7 +84,7 @@ onmessage = function (e) {
     case receiveMessageKinds.forward:
       postMessage(makeMessage(sendMessageKinds.log, "forward message received"));
       var result = forward(message.payload);
-      postMessage(makeMessage(sendMessageKinds.result, result));
+      postMessage(makeMessage(sendMessageKinds.result, result), [result.w.buffer]);
       break;
   }
 }

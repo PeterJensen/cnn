@@ -322,7 +322,7 @@
       var wwTimer = wwTimers[queue.length];
       queue.push({sample: sample, timer: wwTimer});
       wwTimer.start();
-      wwNet.wwForward(sample.vol, function (result) {
+      wwNet.wwForward(sample.vol.clone(), function (result) {
         var entry = queue.shift();
         entry.timer.stop();
         addSample(entry.sample, result);

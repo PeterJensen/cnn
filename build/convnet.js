@@ -243,6 +243,12 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
       for(var i=0;i<n;i++) {
         this.w[i] = json.w[i];
       }
+    },
+    fromJSONReuseW: function(json) {
+      this.sx = json.sx;
+      this.sy = json.sy;
+      this.depth = json.depth;
+      this.w = json.w;
     }
   }
 
@@ -1586,22 +1592,24 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
     function handleMessage(layerWorker, message) {
       switch (message.kind) {
         case receiveMessageKinds.log:
-          console.log("log(" + layerWorker.workerId + "): " + message.payload);
+//          console.log("log(" + layerWorker.workerId + "): " + message.payload);
           break;
         case receiveMessageKinds.result:
-          console.log("result(" + layerWorker.workerId + "): ");
+//          console.log("result(" + layerWorker.workerId + "): ");
           var vol = new Vol();
-          vol.fromJSON(message.payload);
-          layerWorker.callback(vol);
+          vol.fromJSONReuseW(message.payload);
+          var callback = layerWorker.callbackQueue.shift();
+          callback(vol);
           break;
       }
     }
 
     function LayerWorker(wwScript, layer) {
-      var that      = this;
-      this.layer    = layer;
-      this.workerId = workerId++;
-      this.worker   = new Worker(wwScript);
+      var that           = this;
+      this.layer         = layer;
+      this.workerId      = workerId++;
+      this.callbackQueue = [];
+      this.worker        = new Worker(wwScript);
       this.worker.onmessage = function (e) {
         handleMessage(that, e.data);
       }
@@ -1609,9 +1617,8 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
     }
 
     LayerWorker.prototype.forward = function (vol, callback) {
-      this.callback = callback;
-//      callback(this.layer.forward(vol));
-      this.worker.postMessage(makeMessage(sendMessageKinds.forward, vol));
+      this.callbackQueue.push(callback);
+      this.worker.postMessage(makeMessage(sendMessageKinds.forward, vol), [vol.w.buffer]);
     }
 
     return LayerWorker;
@@ -1746,22 +1753,23 @@ var convnetjs = convnetjs || { REVISION: 'ALPHA' };
         callback(this.forward(V));
       }
       else {
-        // use workers here
-        var act = this.layers[0].forward(V);
-        var layerIndex = 1;
-        var that       = this;
-        function forwardLayer(act, done) {
-          that.layers[layerIndex].wwForward(act, function (result) {
-            layerIndex++;
-            if (layerIndex === that.layers.length) {
-              done(result);
-            }
-            else {
-              forwardLayer(result, done);
-            }
-          });
-        }
-        forwardLayer(act, callback);
+        (function (that) {
+          // use workers here
+          var act = that.layers[0].forward(V);
+          var layerIndex = 1;
+          function forwardLayer(act, done) {
+            that.layers[layerIndex].wwForward(act, function (result) {
+              layerIndex++;
+              if (layerIndex === that.layers.length) {
+                done(result);
+              }
+              else {
+                forwardLayer(result, done);
+              }
+            });
+          }
+          forwardLayer(act, callback);
+        })(this);
       }
     },
 
