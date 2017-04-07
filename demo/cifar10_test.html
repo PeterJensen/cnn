@@ -24,15 +24,21 @@
     <button id="reset">Reset</button>
     <button id="useWorkers">Start Workers</button>
     <div>
-      Accuracy: <span id="accuracy"></span><br />
-      <h3>Timing when NOT using Workers</h3>
-      Number of test images: <span id="testImageCount"></span><br />
-      Total time: <span id="testTotalTime"></span><br />
-      Time per image: <span id="testTimePerImage"></span><br />
-      <h3>Timing when using Workers</h3>
-      Number of test images: <span id="wwTestImageCount"></span><br />
-      Total time: <span id="wwTestTotalTime"></span><br />
-      Time per image: <span id="wwTestTimePerImage"></span><br />
+      <div class="secpart">
+        <h3>Stats when NOT using Workers</h3>
+        Accuracy: <span id="accuracy"></span><br />
+        Number of test images: <span id="testImageCount"></span><br />
+        Total time: <span id="testTotalTime"></span><br />
+        Time per image: <span id="testTimePerImage"></span><br />
+      </div>
+      <div class="secpart">
+        <h3>Stats when using Workers</h3>
+        Accuracy: <span id="wwAccuracy"></span><br />
+        Number of test images: <span id="wwTestImageCount"></span><br />
+        Total time: <span id="wwTestTotalTime"></span><br />
+        Time per image: <span id="wwTestTimePerImage"></span><br />
+      </div>
+      <div style="clear:both"></div>
     </div>
     
     <h1>Sample Classifications</h1>

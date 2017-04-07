@@ -1,4 +1,5 @@
 // Author: Peter Jensen
+
 (function () {
 
   const wwQueueCountMax = 4;
@@ -12,6 +13,7 @@
     testImageCount:     "#testImageCount",
     testTotalTime:      "#testTotalTime",
     testTimePerImage:   "#testTimePerImage",
+    wwAccuracy:         "#wwAccuracy",
     wwTestImageCount:   "#wwTestImageCount",
     wwTestTotalTime:    "#wwTestTotalTime",
     wwTestTimePerImage: "#wwTestTimePerImage",
@@ -42,7 +44,8 @@
   var stats;
   var wwNet;
   var wwTimers;
-
+  var wwStats;
+  
   // misc utitilities
   function log(msg) {
     console.log(msg);
@@ -230,7 +233,12 @@
       $domIds.samples.find(">div:last").remove();
     }
     $domIds.samples.prepend($div);
-    stats.record(predictions[0].key === sample.label);
+    if (Processing.isUsingWorkers()) {
+      wwStats.record(predictions[0].key === sample.label);
+    }
+    else {
+      stats.record(predictions[0].key === sample.label);
+    }
   }
 
   function updateStats() {
@@ -262,6 +270,12 @@
     }
     else {
       $domIds.wwTestTimePerImage.text("N/A");
+    }
+    if (wwStats.count > 0) {
+      $domIds.wwAccuracy.text((100*wwStats.successCount/wwStats.count).toFixed(1) + "%");
+    }
+    else {
+      $domIds.wwAccuracy.text("N/A");
     }
   }
 
@@ -404,6 +418,7 @@
       wwTimers[i].reset();
     }
     stats.reset();
+    wwStats.reset();
     Samples.reset();
     updateStats();
     $domIds.samples.empty();
@@ -437,10 +452,11 @@
 
   function main() {
     setJqueryIds();
-    net    = new convnetjs.Net();
-    wwNet  = new convnetjs.Net({useWorkers: true});
-    stats  = new Stats();
-    timer  = new Timing();
+    net     = new convnetjs.Net();
+    stats   = new Stats();
+    timer   = new Timing();
+    wwNet   = new convnetjs.Net({useWorkers: true});
+    wwStats = new Stats();
     wwTimers = [];
     for (var i = 0; i < wwQueueCountMax; ++i) {
       wwTimers.push(new Timing());
