@@ -2,6 +2,11 @@ body {
   width: 800px;
   margin-left: auto;
   margin-right: auto;
+  font-family:Arial;
+}
+
+h1 {
+  text-align:center;
 }
 
 .cc-hidden {
@@ -10,4 +15,37 @@ body {
 
 .cc-bar {
   background-color: rgb(85, 187, 85);
+}
+
+.cc-control {
+  text-align: center;
+  margin: 5px;
+}
+.cc-control button {
+  font-size: 1.5rem;
+  border-radius: 8px;
+  background: #2196f3;
+  color:white;
+  padding:5px;
+  width:100px;
+}
+
+.cc-camera {
+  float:left;
+}
+
+.cc-result {
+  margin-left:10px;
+  width:200px;
+  float:left;
+  font-size:1.5rem;
+}
+
+.cc-prediction {
+  text-align:center;
+  background: green;
+  color: white;
+  font-size:2.0rem;
+  margin-top: 10px;
+  border-radius: 5px;
 }

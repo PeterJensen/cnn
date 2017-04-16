@@ -117,11 +117,30 @@
     return $div;
   }
   
+  function sortedPredictions(vol) {
+    var predictions = [];
+    for (var i = 0; i < classes.length; ++i) {
+      predictions.push({key: i, prediction: vol.get(0, 0, i)})
+    }
+    predictions.sort(function (a, b) {
+      return a.prediction < b.prediction ? 1 : -1;
+    });
+    return predictions;
+  }
+
+  function makePrediction(vol) {
+    var sorted = sortedPredictions(vol);
+    var $div = $("<div class='cc-prediction'>");
+    $div.text("It's a " + classes[sorted[0].key]);
+    return $div;
+  }
+
   function makeSample(sampleVol, result) {
     var $canv       = makeImage(sampleVol, 4);
     var $probs      = makeProbs(result);
+    var $prediction = makePrediction(result);
     var $div        = $("<div>");
-    $div.append($canv, $probs);
+    $div.append($canv, $probs, $prediction);
     return $div;
   }
 

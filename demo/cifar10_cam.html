@@ -12,10 +12,18 @@
 </head>
 <body>
   <h1>CIFAR-10 Camera Input</h1>
-  <button id="startStop">Start</button>
   <video class="cc-hidden"></video>
-  <canvas id="canvasBig"></canvas>
-  <canvas id="canvasSmall"></canvas>
-  <div id="result"></div>
+  <p>This uses a pre-trained network, that should yield ~75% accuracy.
+     The camera input it cropped and scaled to a 32x32 image before processing.</p>
+  <div id="control" class="cc-control">
+    <button id="startStop">Start</button>
+  </div>
+  <div id="camera" class="cc-camera">
+    <canvas id="canvasBig"></canvas>
+  </div>
+  <div id="result" class="cc-result"></div>
+  <div id="testOutput" class="cc-hidden">
+    <canvas id="canvasSmall"></canvas>
+  </div>
 </body>
 </html>
