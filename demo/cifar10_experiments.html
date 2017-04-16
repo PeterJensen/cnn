@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  Author: Peter Jensen
+-->
+<html>
+<head>
+  <link rel="stylesheet" href="css/cifar10_cam.css">
+</head>
+<body>
+  <h1>CIFAR-10 Experiments</h1>
+  <p>These experiments are using a modified version of the amazing 
+     <a href="http://cs.stanford.edu/people/karpathy/convnetjs/">convnet.js</a> framework.
+     This framework enables users to define a multi layer neural network.  Features for
+     both training and inference are available for the custom network.  I've experimented with the
+    <a href="http://www.cs.toronto.edu/~kriz/cifar.html">cifar10 data set</a> for the experiments below.</p>
+
+  <h2><a href="./cifar10_test.html">Using Web Workers</a></h2>
+  <p>This experiment uses Web Workers for the forward computation of the convolution layers
+     in a pre-trained network.  The various layers form a pipeline, where each convolution
+     stage in the pipeline has a dedicated Web Worker.  Performance profiling reveals that
+     the convolution layers are responsible for the majority of the compute time required.
+     By using Web Workers the per image processing time is cut roughly in half.  Clik the
+     title of this paragraph to see for yourself.</p>
+
+  <h2><a href="./cifar10_cam.html">Using camera input for processing</a></h2>
+  <p>This experiment will capture frames from the webcam and categorize what it sees into
+     the 10 different categories used by the cifar10 tests.  Try it for yourself by clicking
+     the title of this paragraph.  There's also a short video of me playing with this here:</p>
+     <p><a href="https://youtu.be/MM41mgG6-OQ">Demo Video</a></p>
+  
+</body>
+</html>
