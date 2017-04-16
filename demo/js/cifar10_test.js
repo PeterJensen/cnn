@@ -224,7 +224,7 @@
 
   function addSample(sample, result) {
     var predictions = sortedPredictions(result);
-    var $canv       = makeImage(sample.vol);
+    var $canv       = makeImage(sample.vol, 4);
     var $probs      = makeProbs(predictions, sample.label);
     var $div        = $("<div class='testdiv'>");
     $div.append($canv, $probs);
